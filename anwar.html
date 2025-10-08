@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>AI Recommendations</title>
+  <style>
+    :root { --brand:#2c3e50; --ink:#1f2937; --muted:#6b7280; --bg:#ffffff; --card:#ffffff; --border:#e5e7eb; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    header{position:sticky;top:0;background:#fff;padding:14px 16px;border-bottom:1px solid var(--border);z-index:10}
+    h1{font-size:18px;margin:0;color:var(--brand)}
+    .container{padding:16px;max-width:720px;margin:0 auto}
+    .search {display:flex;gap:8px;margin-bottom:12px}
+    .search input, .search select{flex:1;padding:10px;border:1px solid var(--border);border-radius:12px;font-size:14px;}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+    .row{margin:6px 0;font-size:14px}
+    .row b{color:#000}
+    .btn{margin-top:10px;padding:10px 14px;border:none;border-radius:12px;background:var(--brand);color:#fff;font-weight:600;font-size:14px;cursor:pointer}
+    .btn.secondary{background:#111827}
+    .hidden{display:none}
+
+    table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px;table-layout:fixed}
+    th,td{border:1px solid var(--border);padding:10px;text-align:center;vertical-align:middle}
+    thead th{background:#d1d5db;color:#111827}
+    th.profit-col{width:90px}                 /* small Profit column */
+    th.prod-col{width:auto}                   /* other space splits between Product 1/2 */
+    td.prod{white-space:nowrap}               /* single line only */
+
+    .row.inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .pill{display:inline-block;padding:2px 8px;border:1px solid var(--border);border-radius:999px;font-size:12px;color:#374151}
+    .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 14px;border-radius:10px;opacity:0;transition:opacity .2s}
+    .toast.show{opacity:1}
+    .feedback{width:100%;min-height:100px;padding:10px;border:1px solid var(--border);border-radius:12px;font-size:14px}
+
+    /* checkbox + name in one line, no wrap, ellipsis if too long */
+    label.cell { display:flex; align-items:center; gap:8px; justify-content:flex-start; white-space:nowrap; overflow:hidden }
+    label.cell span.name { display:inline-block; white-space:normal; overflow:visible; text-overflow:unset; max-width:100% }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="AR_Logo.png" alt="Logo" class="logo">
+    <h1 id="title">AI Recommendations</h1>
+    <div class="row" style="color:var(--muted);font-size:13px">Choose a customer and tap “View Products”.</div>
+  </header>
+
+  <!-- LIST VIEW -->
+  <div class="container" id="list-view">
+    <div class="search">
+      <input id="searchBox" placeholder="Search Customer or Code…"/>
+      <select id="customerSelect">
+        <option value="">All Customers</option>
+      </select>
+    </div>
+    <div id="cards"></div>
+  </div>
+
+  <!-- DETAIL VIEW -->
+  <div class="container hidden" id="detail-view">
+    <button class="btn secondary" id="backBtn">← Back</button>
+
+    <div class="card">
+      <div class="row"><b>Customer:</b> <span id="dCustomer"></span></div>
+      <div class="row"><b>Customer Code:</b> <span id="dCode"></span></div>
+    </div>
+
+    <div class="card">
+      <div class="row inline">
+        <input id="visited" type="checkbox" />
+        <label for="visited"><b>Customer Visited</b></label>
+        <span class="pill" id="visitedStatus">No</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th class="profit-col">Profit</th>
+            <th class="prod-col">Product 1</th>
+            <th class="prod-col">Product 2</th>
+          </tr>
+        </thead>
+        <tbody id="profitBody"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="row"><b>Feedback</b></div>
+      <textarea id="feedback" class="feedback" placeholder="Type feedback…"></textarea>
+    </div>
+
+    <div class="row inline">
+      <button class="btn" id="saveBtn">Save</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Saved</div>
+
+  <script>
+    /* ===== Injected by builder ===== */
+    const EMPLOYEE_NAME = "ANWAR";
+    const ROWS = [{"Unnamed: 0": "6", "EMPLOYEE": "ANWAR", "CUSTOMER": "RUKN AL FALAH HYPER MARKET L.L.C", "Customer_code": "SHT/RTL/0207", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR Basmathi Rice 5kg", "Product_2_profit10-20%": "No Product", "Product_1_profit20-40%": "RK PR SEMOLINA - 12 X 1 KG", "Product_2_profit20-40%": "RK PR MOONG DAL 16 X 1 KG", "Product_1_profit40-60%": "RK PR CORIANDER POWDER - 48 X 200 GM", "Product_2_profit40-60%": "No Product", "Product_1_profit60-80%": "No Product", "Product_2_profit60-80%": "No Product", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "12", "EMPLOYEE": "ANWAR", "CUSTOMER": "BAB AL MAYDAN SUPERMARKET LLC", "Customer_code": "SHT/RTL/0360", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK PR ASSAM BLACK TEA - 48 X 200 GM", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PR ROASTED SEMOLINA (RAVA) - 10 X 1 KG", "Product_1_profit20-40%": "RK PR MOONG DAL 16 X 1 KG", "Product_2_profit20-40%": "RK PR WHITE CHANA - 16 X 1 KG", "Product_1_profit40-60%": "RK MATTA RICE - BROKEN - 16 X 1 KG", "Product_2_profit40-60%": "RK RAISIN - 72 X 100 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK CHILLY CRUSHED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "13", "EMPLOYEE": "ANWAR", "CUSTOMER": "NEW STAR FAMILIES SUPERMARKET LLC", "Customer_code": "SHT/RTL/0369", "Product_1_profit<10%": "RK PR BOX SAMBAR POWDER - 40 X 160 GM", "Product_2_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_1_profit10-20%": "RK PR Palakkadan Matta Rice 5kg", "Product_2_profit10-20%": "RK PR CHAKKI ATTA -10 KG", "Product_1_profit20-40%": "RK JAGGERY - 20 X 500 GM", "Product_2_profit20-40%": "RK MOONG DAL - 32 X 500 GM", "Product_1_profit40-60%": "RK MASOOR DAL - 32 X 500 GM", "Product_2_profit40-60%": "RK KALA CHANA - 32 X 500 GM", "Product_1_profit60-80%": "RK PANCH PHORON - 72 X 100 GM", "Product_2_profit60-80%": "RK MUSTARD SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "14", "EMPLOYEE": "ANWAR", "CUSTOMER": "AL RAMZ HYPERMARKET LLC", "Customer_code": "SHT/RTL/0372", "Product_1_profit<10%": "RK PR BOX SAMBAR POWDER - 40 X 160 GM", "Product_2_profit<10%": "RK PR BOX CHICKEN MASALA - 40 X 160 GM", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK BTL FINE TABLE SALT(BLUE) - 12 X 700 GM", "Product_1_profit20-40%": "RK SHAH JEERA- 72 X 100 GM", "Product_2_profit20-40%": "RK PR KASURI METHI (COMBO BOX) - 2 X 50 GM", "Product_1_profit40-60%": "RK GARAM MASALA POWDER - 48 X 200 GM", "Product_2_profit40-60%": "RK CLOVES - 72 X 100 GM", "Product_1_profit60-80%": "RK ANISEED - 72 X 100 GM", "Product_2_profit60-80%": "RK ANARDANA - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "16", "EMPLOYEE": "ANWAR", "CUSTOMER": "SUPER BONANZA HYPER MARKETL.L.C. SHJ.BR-BRANCH-2", "Customer_code": "SHT/RTL/0380", "Product_1_profit<10%": "RK PR BOX CHICKEN MASALA - 40 X 160 GM", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "RK PR BASMATHI XXL RICE 8x2 KG", "Product_1_profit20-40%": "RK PR BOTTLE COMBO ( SAMBAR,CURRY,CORRI ) 3 X 160 GM", "Product_2_profit20-40%": "RK PR CHILLY POWDER - 48 X 200 GM", "Product_1_profit40-60%": "RK PR CORIANDER POWDER - 48 X 200 GM", "Product_2_profit40-60%": "RK BLACK EYE BEANS - 32 X 500 GM", "Product_1_profit60-80%": "RK PANCH PHORON - 72 X 100 GM", "Product_2_profit60-80%": "RK YELLOW MUSTARD SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "19", "EMPLOYEE": "ANWAR", "CUSTOMER": "AZHAR AL MADINA HYPERMARKET L.L.C.", "Customer_code": "SHT/RTL/0468", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "RK BTL FINE TABLE SALT(BLUE) - 12 X 700 GM", "Product_1_profit20-40%": "RK JAGGERY - 20 X 500 GM", "Product_2_profit20-40%": "RK BLACK PEPPER WHOLE - 72 X 100 GM", "Product_1_profit40-60%": "RK TURMERIC POWDER - 48 X 200 GM", "Product_2_profit40-60%": "RK GARAM MASALA WHOLE - 48 X 100 GM", "Product_1_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK FENNEL SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "20", "EMPLOYEE": "ANWAR", "CUSTOMER": "MANARAT AL SAJAA HYPER MARKET L.L.C", "Customer_code": "SHT/RTL/0471", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PR ROASTED SEMOLINA (RAVA) - 10 X 1 KG", "Product_1_profit20-40%": "RK JAGGERY - 20 X 500 GM", "Product_2_profit20-40%": "RK BLACK PEPPER WHOLE - 72 X 100 GM", "Product_1_profit40-60%": "RK CLOVES - 72 X 50 GM", "Product_2_profit40-60%": "RK GARAM MASALA WHOLE - 48 X 100 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "25", "EMPLOYEE": "ANWAR", "CUSTOMER": "SPARK SUPERMARKET L.L.C", "Customer_code": "SHT/RTL/0481", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PR ROASTED SEMOLINA (RAVA) - 10 X 1 KG", "Product_1_profit20-40%": "RK BASMATHI RICE - 16 X 1 KG", "Product_2_profit20-40%": "RK SUGAR - 12 X 1 KG", "Product_1_profit40-60%": "RK MATTAR DAL - 32 X 500 GM", "Product_2_profit40-60%": "RK URAD GOTA - 32 X 500 GM", "Product_1_profit60-80%": "RK CHILLY CRUSHED - 72 X 100 GM", "Product_2_profit60-80%": "RK POHA WHITE - 32 X 200 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "37", "EMPLOYEE": "ANWAR", "CUSTOMER": "AL ASLI SUPERMARKET LLC", "Customer_code": "SHT/RTL/0599", "Product_1_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK RED KIDNEY BEANS - 16 X 1 KG", "Product_2_profit10-20%": "RK JEERAKASHALA (GHEE RICE) - 5 X 5 KG", "Product_1_profit20-40%": "RK PR SEMOLINA - 12 X 1 KG", "Product_2_profit20-40%": "RK JAGGERY - 20 X 500 GM", "Product_1_profit40-60%": "RK BLACK PEPPER POWDER - 72 X 100 GM", "Product_2_profit40-60%": "RK MASOOR DAL - 32 X 500 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK FENNEL SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "40", "EMPLOYEE": "ANWAR", "CUSTOMER": "AL FALAH SUPERMARKET (FZC)", "Customer_code": "SHT/RTL/0629", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR CHAKKI ATTA -5 KG", "Product_2_profit10-20%": "RK PHOOL MAKHANA - 10 X 100 GM", "Product_1_profit20-40%": "RK JAGGERY - 20 X 500 GM", "Product_2_profit20-40%": "RK BESAN - CHANA DAL - 10 X 1KG", "Product_1_profit40-60%": "RK GARAM MASALA WHOLE - 48 X 100 GM", "Product_2_profit40-60%": "RK AJWAIN SEEDS - 72 X 100 GM", "Product_1_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK LONG CHILLY - 24 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "42", "EMPLOYEE": "ANWAR", "CUSTOMER": "ATLAS TOWER GIFT CENTER L.L.C SOLE PROPRIETORSHIP", "Customer_code": "SHT/RTL/0657", "Product_1_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_2_profit<10%": "RK PR BOX CHICKEN MASALA - 40 X 160 GM", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PR ASSAM BLACK TEA - 24 X 400 GM", "Product_1_profit20-40%": "RK BTL FINE TABLE SALT IODIZED(RED) - 12 X 700 GM", "Product_2_profit20-40%": "RK BASMATHI RICE - 16 X 1 KG", "Product_1_profit40-60%": "RK RAISIN - 72 X 100 GM", "Product_2_profit40-60%": "RK MASOOR WHOLE - 16 X 1 KG", "Product_1_profit60-80%": "RK CHILLY CRUSHED - 72 X 100 GM", "Product_2_profit60-80%": "RK PEANUT 48 X 200 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "43", "EMPLOYEE": "ANWAR", "CUSTOMER": "AL NAHDA GIFTS CENTER", "Customer_code": "SHT/RTL/0664", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "VERMICELLIES 777 (140GMX48PKT)", "Product_1_profit20-40%": "RK PR SEMOLINA - 12 X 1 KG", "Product_2_profit20-40%": "RK PR TURMERIC POWDER - 48 X 200 GM", "Product_1_profit40-60%": "RK BLACK PEPPER POWDER - 72 X 100 GM", "Product_2_profit40-60%": "RK PAPRIKA POWDER - 72 X 100 GM", "Product_1_profit60-80%": "RK CUMIN POWDER - 72 X 100 GM", "Product_2_profit60-80%": "RK CHIA SEED - 48 X 200 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "50", "EMPLOYEE": "ANWAR", "CUSTOMER": "NIGHT TO NIGHT DEPARTMENT STORE", "Customer_code": "SHT/RTL/0805", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK PR BOX CHICKEN MASALA - 40 X 160 GM", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PR WHEAT PUTTU PODI 10 X 1 KG", "Product_1_profit20-40%": "RK PR CHANA DAL - 16 X 1 KG", "Product_2_profit20-40%": "RK BLACK PEPPER WHOLE - 72 X 100 GM", "Product_1_profit40-60%": "RK CLOVES - 72 X 50 GM", "Product_2_profit40-60%": "RK AJWAIN SEEDS - 72 X 100 GM", "Product_1_profit60-80%": "RK PANCH PHORON - 72 X 100 GM", "Product_2_profit60-80%": "RK MUSTARD SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "51", "EMPLOYEE": "ANWAR", "CUSTOMER": "SAMAA AL FALAK SUPERMARKET LLC . SP", "Customer_code": "SHT/RTL/0814", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_1_profit10-20%": "RK PR ROASTED SEMOLINA (RAVA) - 10 X 1 KG", "Product_2_profit10-20%": "RK PR RED KIDNEY BEANS 16 X 1KG", "Product_1_profit20-40%": "RK JAGGERY - 20 X 500 GM", "Product_2_profit20-40%": "RK PR CHILLY POWDER - 48 X 200 GM", "Product_1_profit40-60%": "RK CLOVES - 72 X 50 GM", "Product_2_profit40-60%": "RK URAD SPLIT - 32 X 500 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 48 X 200 GM", "Product_2_profit60-80%": "RK FENUGREEK SEED - 48 X 200 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "54", "EMPLOYEE": "ANWAR", "CUSTOMER": "AFRAH AL DAR SUPERMARKET", "Customer_code": "SHT/RTL/0820", "Product_1_profit<10%": "MOONG DAL - 777 - 15 KG", "Product_2_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "RK BTL FINE TABLE SALT(BLUE) - 12 X 700 GM", "Product_1_profit20-40%": "RK PR KALA CHANA - 16 X 1 KG", "Product_2_profit20-40%": "RK SUGAR - 6 X 2 KG", "Product_1_profit40-60%": "RK GARAM MASALA WHOLE - 48 X 100 GM", "Product_2_profit40-60%": "RK MASOOR DAL - 32 X 500 GM", "Product_1_profit60-80%": "RK PANCH PHORON - 72 X 100 GM", "Product_2_profit60-80%": "RK GINGER POWDER - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "61", "EMPLOYEE": "ANWAR", "CUSTOMER": "DAY TO DAY INTL HYP SHJ,BR-BRANCH 1 (ABU SHAGARA)", "Customer_code": "SHT/RTL/0921", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK PR ASSAM BLACK TEA - 48 X 200 GM", "Product_1_profit10-20%": "RK PR STEAM PUTTU PODI 10 X 1 KG", "Product_2_profit10-20%": "RK PR Jeerakashala Rice 5kg", "Product_1_profit20-40%": "RK BESAN - CHANA DAL - 10 X 1KG", "Product_2_profit20-40%": "RK CARDAMOM - 72 X 100 GM", "Product_1_profit40-60%": "RK RAGI POWDER - 24 X 500 GM", "Product_2_profit40-60%": "RK MANGO POWDER - 72 X 100 GM", "Product_1_profit60-80%": "RK ANISEED - 72 X 100 GM", "Product_2_profit60-80%": "RK KASHMIRI CHILLY WHOLE - 24 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "65", "EMPLOYEE": "ANWAR", "CUSTOMER": "DELTA TRADING CENTER LLC - BRANCH 01", "Customer_code": "SHT/RTL/0940", "Product_1_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "RK PR CHAKKI ATTA -10 KG", "Product_1_profit20-40%": "RK JAGGERY - 20 X 500 GM", "Product_2_profit20-40%": "RK BLACK PEPPER WHOLE - 72 X 100 GM", "Product_1_profit40-60%": "RK CLOVES - 72 X 50 GM", "Product_2_profit40-60%": "RK KALA CHANA - 32 X 500 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "66", "EMPLOYEE": "ANWAR", "CUSTOMER": "DAY TO DAY INTERNATIONAL DEPARTMENT STORE L.L.C", "Customer_code": "SHT/RTL/0943", "Product_1_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_2_profit<10%": "RK PR ASSAM BLACK TEA - 48 X 200 GM", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PR STEAM PUTTU PODI 10 X 1 KG", "Product_1_profit20-40%": "RK BESAN - CHANA DAL - 10 X 1KG", "Product_2_profit20-40%": "RK KABULI CHICK PEAS - LARGE - 16 X 1 KG", "Product_1_profit40-60%": "RK HORSE GRAM - 32 X 500 GM", "Product_2_profit40-60%": "RK ROASTED GRAM SPLIT - 16 X500 GM", "Product_1_profit60-80%": "RK POHA WHITE - 32 X 200 GM", "Product_2_profit60-80%": "RK ALOO BUKHARA - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "67", "EMPLOYEE": "ANWAR", "CUSTOMER": "HORIZON STAR SUPERMARKET, LLC", "Customer_code": "SHT/RTL/0944", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_1_profit10-20%": "RK PR BOX COMBO (BIRIYANI,CHICKEN,GARAM MASALA) 3 X (100+160+100) GM", "Product_2_profit10-20%": "RK PR BASMATHI XXL RICE 8x2 KG", "Product_1_profit20-40%": "RK PR CHANA DAL - 16 X 1 KG", "Product_2_profit20-40%": "RK JAGGERY - 20 X 500 GM", "Product_1_profit40-60%": "RK CLOVES - 72 X 50 GM", "Product_2_profit40-60%": "RK GARAM MASALA WHOLE - 48 X 100 GM", "Product_1_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK ALOO BUKHARA - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "68", "EMPLOYEE": "ANWAR", "CUSTOMER": "DAY TO DAY GENERAL TRADING CENTER", "Customer_code": "SHT/RTL/0947", "Product_1_profit<10%": "RK PR BOX SAMBAR POWDER - 40 X 160 GM", "Product_2_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PR ROASTED SEMOLINA (RAVA) - 10 X 1 KG", "Product_1_profit20-40%": "RK RED KIDNEY BEANS - 32 X 500 GM", "Product_2_profit20-40%": "RK PR MOONG WHOLE -16 X 1 KG", "Product_1_profit40-60%": "RK GARAM MASALA WHOLE - 48 X 100 GM", "Product_2_profit40-60%": "RK KALA CHANA - 32 X 500 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 48 X 200 GM", "Product_2_profit60-80%": "RK KASHMIRI CHILLY WHOLE - 24 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "69", "EMPLOYEE": "ANWAR", "CUSTOMER": "GIFT CENTER GENERAL TRADING (SPS - LLC)", "Customer_code": "SHT/RTL/0949", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "RK PR STEAM PUTTU PODI 10 X 1 KG", "Product_1_profit20-40%": "RK SHAH JEERA- 72 X 100 GM", "Product_2_profit20-40%": "RK PR SEMOLINA - 12 X 1 KG", "Product_1_profit40-60%": "RK CLOVES - 72 X 50 GM", "Product_2_profit40-60%": "RK MASOOR DAL - 32 X 500 GM", "Product_1_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK FENNEL SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "71", "EMPLOYEE": "ANWAR", "CUSTOMER": "DAY TO DAY INTERNATIONAL TRADIING LLC (BRANCH)", "Customer_code": "SHT/RTL/0951", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK PR BOX CHICKEN MASALA - 40 X 160 GM", "Product_1_profit10-20%": "RK PR LONG GRAIN BIRIYANI RICE - 5 X 5KG", "Product_2_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_1_profit20-40%": "RK PR MOONG DAL 16 X 1 KG", "Product_2_profit20-40%": "RK SUGAR - 6 X 2 KG", "Product_1_profit40-60%": "RK MOONG SPLIT - 32 X 500 GM", "Product_2_profit40-60%": "RK BAJRA - 16 X 1 KG", "Product_1_profit60-80%": "RK MUSTARD SEED - 48 X 200 GM", "Product_2_profit60-80%": "RK BTL CUMIN SEED - 24 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "72", "EMPLOYEE": "ANWAR", "CUSTOMER": "FRIDAY TR CENTER LLC", "Customer_code": "SHT/RTL/0953", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK CURD CHILLY - 32 X 100 GM", "Product_1_profit10-20%": "RK PR ROASTED SEMOLINA (RAVA) - 10 X 1 KG", "Product_2_profit10-20%": "RK PR Palakkadan Matta Rice 5kg", "Product_1_profit20-40%": "RK SUGAR - 6 X 2 KG", "Product_2_profit20-40%": "RK CASHEW W320 - 72 X 100 GM", "Product_1_profit40-60%": "RK PEANUT 24 X 500 GM", "Product_2_profit40-60%": "RK MIX NUTS - 72 X100 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 48 X 200 GM", "Product_2_profit60-80%": "RK SOYA WADI - 8 X 400 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "73", "EMPLOYEE": "ANWAR", "CUSTOMER": "ON MART HYPERMARKET", "Customer_code": "SHT/RTL/0954", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_1_profit10-20%": "RK BTL FINE TABLE SALT(BLUE) - 12 X 700 GM", "Product_2_profit10-20%": "RK PR RED KIDNEY BEANS 16 X 1KG", "Product_1_profit20-40%": "RK SUGAR - 12 X 1 KG", "Product_2_profit20-40%": "RK SUGAR - 5 KG", "Product_1_profit40-60%": "RK TURMERIC POWDER - 48 X 200 GM", "Product_2_profit40-60%": "RK GARAM MASALA WHOLE - 48 X 100 GM", "Product_1_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK LONG CHILLY - 24 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "74", "EMPLOYEE": "ANWAR", "CUSTOMER": "GREEN MART HYPERMARKET L.L.C", "Customer_code": "SHT/RTL/0964", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_1_profit20-40%": "RK PR SEMOLINA - 12 X 1 KG", "Product_2_profit20-40%": "ANJALI GINGELLY OIL - 12 X 1 LTR", "Product_1_profit40-60%": "RK SATTU POWDER - 16 X 500 GM", "Product_2_profit40-60%": "RK TURMERIC POWDER - 48 X 200 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 48 X 200 GM", "Product_2_profit60-80%": "RK MUSTARD SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "75", "EMPLOYEE": "ANWAR", "CUSTOMER": "LULUAT AL KHALEEJ GIFTS CENTER", "Customer_code": "SHT/RTL/0965", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK PR BOX CHICKEN MASALA - 40 X 160 GM", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_1_profit20-40%": "RK SHAH JEERA- 72 X 100 GM", "Product_2_profit20-40%": "RK BLACK PEPPER WHOLE - 48 X200 GM", "Product_1_profit40-60%": "RK BLACK PEPPER POWDER 48 X 200 GM", "Product_2_profit40-60%": "RK GREEN LENTILS - 16 X 1 KG", "Product_1_profit60-80%": "RK FENUGREEK SEED - 48 X 200 GM", "Product_2_profit60-80%": "RK CUMIN POWDER - 48 X 200 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "76", "EMPLOYEE": "ANWAR", "CUSTOMER": "BRAND MART GENERAL TRADING LLC - BRANCH 01", "Customer_code": "SHT/RTL/0966", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "RK PR STEAM PUTTU PODI 10 X 1 KG", "Product_1_profit20-40%": "RK PR KALA CHANA - 16 X 1 KG", "Product_2_profit20-40%": "RK PR SEMOLINA - 12 X 1 KG", "Product_1_profit40-60%": "RK CLOVES - 72 X 50 GM", "Product_2_profit40-60%": "RK MASOOR DAL - 32 X 500 GM", "Product_1_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK FENNEL SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "79", "EMPLOYEE": "ANWAR", "CUSTOMER": "BAZAR DISCOUNT CENTER L.L.C", "Customer_code": "SHT/RTL/0976", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR BOX MUTTON MASALA - 40 X 160 GM", "Product_2_profit10-20%": "RK PR BOX MEAT MASALA - 40 X 160 GM", "Product_1_profit20-40%": "RK KABULI CHICK PEAS - LARGE - 16 X 1 KG", "Product_2_profit20-40%": "RK URAD DAL - 32 X 500 GM", "Product_1_profit40-60%": "RK URAD SPLIT - 32 X 500 GM", "Product_2_profit40-60%": "RK URAD SPLIT - 16 X 1 KG", "Product_1_profit60-80%": "RK CHIA SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK YELLOW MUSTARD SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "80", "EMPLOYEE": "ANWAR", "CUSTOMER": "DAY TO DAY INTERNATIONAL TRADING LLC BRANCH - BARSHA 01", "Customer_code": "SHT/RTL/0982", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR LONG GRAIN BIRIYANI RICE - 5 X 5KG", "Product_2_profit10-20%": "RK PR ROASTED SEMOLINA (RAVA) - 10 X 1 KG", "Product_1_profit20-40%": "RK SUGAR - 6 X 2 KG", "Product_2_profit20-40%": "RK SUGAR - 12 X 1 KG", "Product_1_profit40-60%": "RK MASOOR DAL - 32 X 500 GM", "Product_2_profit40-60%": "RK TOOR DAL - 32 X 500 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 48 X 200 GM", "Product_2_profit60-80%": "RK PANCH PHORON - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "82", "EMPLOYEE": "ANWAR", "CUSTOMER": "DAY TO DAY INTERNATIONAL TRADING LLC BRANCH - AL KARAMA", "Customer_code": "SHT/RTL/0992", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PR ROASTED SEMOLINA (RAVA) - 10 X 1 KG", "Product_1_profit20-40%": "RK CHILLY POWDER - 48 X 200 GM", "Product_2_profit20-40%": "RK MASOOR DAL - 16 X 1 KG", "Product_1_profit40-60%": "RK SATTU POWDER - 16 X 500 GM", "Product_2_profit40-60%": "RK TURMERIC POWDER - 48 X 200 GM", "Product_1_profit60-80%": "RK FENUGREEK SEED - 48 X 200 GM", "Product_2_profit60-80%": "RK POHA WHITE - 32 X 200 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "83", "EMPLOYEE": "ANWAR", "CUSTOMER": "AL WAHDA DISCOUNT CENTRE", "Customer_code": "SHT/RTL/0997", "Product_1_profit<10%": "RK PR BOX SAMBAR POWDER - 40 X 160 GM", "Product_2_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_1_profit10-20%": "RK PR BOX COMBO (BIRIYANI,CHICKEN,GARAM MASALA) 3 X (100+160+100) GM", "Product_2_profit10-20%": "RK PR BASMATHI XXL RICE 8x2 KG", "Product_1_profit20-40%": "RK SHAH JEERA- 72 X 100 GM", "Product_2_profit20-40%": "RK PR KASURI METHI (COMBO BOX) - 2 X 50 GM", "Product_1_profit40-60%": "RK URAD SPLIT - 16 X 1 KG", "Product_2_profit40-60%": "RK SESAME SEED BLACK - 72 X 100 GM", "Product_1_profit60-80%": "RK KASHMIRI CHILLY WHOLE - 24 X 100 GM", "Product_2_profit60-80%": "RK POHA WHITE - 32 X 200 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "84", "EMPLOYEE": "ANWAR", "CUSTOMER": "DEALS LAND DEPARTMENT STORE LLC", "Customer_code": "SHT/RTL/1018", "Product_1_profit<10%": "RK PR BOX SAMBAR POWDER - 40 X 160 GM", "Product_2_profit<10%": "RK CUMIN POWDER - 10 X 1 KG", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "RK PR Palakkadan Matta Rice 5kg", "Product_1_profit20-40%": "RK SUGAR - 6 X 2 KG", "Product_2_profit20-40%": "RK WHITE KIDNEY BEANS - 32 X 500 GM", "Product_1_profit40-60%": "RK RAISIN - 72 X 100 GM", "Product_2_profit40-60%": "RK URAD SPLIT - 32 X 500 GM", "Product_1_profit60-80%": "RK CHIA SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK CUMIN POWDER - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "85", "EMPLOYEE": "ANWAR", "CUSTOMER": "GREEN PLANET SUPERMARKET LLC SP", "Customer_code": "SHT/RTL/1025", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "No Product", "Product_2_profit10-20%": "No Product", "Product_1_profit20-40%": "RK KABULI CHICK PEAS - LARGE - 32 X 500 GM", "Product_2_profit20-40%": "RK PR TOOR DAL - 16 X 1 KG", "Product_1_profit40-60%": "RK RED CHAWLI -COW BEANS - 32 X 500 GM", "Product_2_profit40-60%": "RK MASOOR DAL - 32 X 500 GM", "Product_1_profit60-80%": "No Product", "Product_2_profit60-80%": "No Product", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "86", "EMPLOYEE": "ANWAR", "CUSTOMER": "DELTA CENTER TR LLC - SP - BR : 01 ( AL MAJAR)", "Customer_code": "SHT/RTL/1037", "Product_1_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_2_profit<10%": "RK PR ASSAM BLACK TEA - 48 X 200 GM", "Product_1_profit10-20%": "RK BTL FINE TABLE SALT(BLUE) - 12 X 700 GM", "Product_2_profit10-20%": "RK BOX CORN FLOUR - 12 X 400 GM", "Product_1_profit20-40%": "RK SUGAR - 6 X 2 KG", "Product_2_profit20-40%": "RK CASHEW W320 - 72 X 100 GM", "Product_1_profit40-60%": "RK RAISIN - 72 X 100 GM", "Product_2_profit40-60%": "RK MIX NUTS - 72 X100 GM", "Product_1_profit60-80%": "RK CHIA SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK SWEET FENNEL SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "87", "EMPLOYEE": "ANWAR", "CUSTOMER": "QAMAR DAY TO DAY SUPERMARKET LLC", "Customer_code": "SHT/RTL/1050", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "VERMICELLIES 777 (140GMX48PKT)", "Product_1_profit20-40%": "RK PR SEMOLINA - 12 X 1 KG", "Product_2_profit20-40%": "RK PR TURMERIC POWDER - 48 X 200 GM", "Product_1_profit40-60%": "RK BLACK PEPPER POWDER - 72 X 100 GM", "Product_2_profit40-60%": "RK PAPRIKA POWDER - 72 X 100 GM", "Product_1_profit60-80%": "RK CUMIN POWDER - 72 X 100 GM", "Product_2_profit60-80%": "RK CHIA SEED - 48 X 200 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "89", "EMPLOYEE": "ANWAR", "CUSTOMER": "NAJMAT AL FALAQ SUPERMARKET", "Customer_code": "SHT/RTL/1059", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_1_profit10-20%": "RK BTL FINE TABLE SALT(BLUE) - 12 X 700 GM", "Product_2_profit10-20%": "RK PR BASMATI RICE - 3 KG", "Product_1_profit20-40%": "RK PR KALA CHANA - 16 X 1 KG", "Product_2_profit20-40%": "RK BLACK PEPPER WHOLE - 72 X 100 GM", "Product_1_profit40-60%": "RK PAPRIKA POWDER - 72 X 100 GM", "Product_2_profit40-60%": "RK GARAM MASALA WHOLE - 48 X 100 GM", "Product_1_profit60-80%": "RK PEANUT 48 X 200 GM", "Product_2_profit60-80%": "RK CUMIN POWDER - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "91", "EMPLOYEE": "ANWAR", "CUSTOMER": "GALAXY GIFT MARKET", "Customer_code": "SHT/RTL/1065", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_1_profit10-20%": "RK PR Basmathi Rice 5kg", "Product_2_profit10-20%": "RK PHOOL MAKHANA - 10 X 100 GM", "Product_1_profit20-40%": "RK PR MOONG DAL 16 X 1 KG", "Product_2_profit20-40%": "RK PR MOONG WHOLE -16 X 1 KG", "Product_1_profit40-60%": "RK MASOOR DAL - 32 X 500 GM", "Product_2_profit40-60%": "RK BLACK PEPPER POWDER - 72 X 100 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "92", "EMPLOYEE": "ANWAR", "CUSTOMER": "ASWAQ AL SEYOUH GIFTS LLC", "Customer_code": "SHT/RTL/1068", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "No Product", "Product_2_profit10-20%": "No Product", "Product_1_profit20-40%": "RK SUGAR - 5 KG", "Product_2_profit20-40%": "RK JAGGERY - 20 X 500 GM", "Product_1_profit40-60%": "RK BTL PAPRIKA POWDER - 24 X 160 GM", "Product_2_profit40-60%": "RK BTL CHILLY POWDER - 24 X 160 GM", "Product_1_profit60-80%": "RK BTL TURMERIC POWDER - 24 X 160 GM", "Product_2_profit60-80%": "RK BTL OREGANO - 24 X 75 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "93", "EMPLOYEE": "ANWAR", "CUSTOMER": "ARKAN AL MADINA HYPERMARKET LLC", "Customer_code": "SHT/RTL/1069", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "No Product", "Product_2_profit10-20%": "No Product", "Product_1_profit20-40%": "RK SUGAR - 12 X 1 KG", "Product_2_profit20-40%": "No Product", "Product_1_profit40-60%": "No Product", "Product_2_profit40-60%": "No Product", "Product_1_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_2_profit60-80%": "No Product", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "96", "EMPLOYEE": "ANWAR", "CUSTOMER": "FAAZ HYPER MARKET L.L.C", "Customer_code": "SHT/RTL/1098", "Product_1_profit<10%": "RK PR ASSAM BLACK TEA - 48 X 200 GM", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR LONG GRAIN BIRIYANI RICE - 5 X 5KG", "Product_2_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_1_profit20-40%": "RK SUGAR - 6 X 2 KG", "Product_2_profit20-40%": "RK PR MOONG WHOLE -16 X 1 KG", "Product_1_profit40-60%": "RK PALAKKADAN MATTA 16 X 1 KG", "Product_2_profit40-60%": "RK PR CORIANDER POWDER - 48 X 200 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 48 X 200 GM", "Product_2_profit60-80%": "RK MUSTARD SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "97", "EMPLOYEE": "ANWAR", "CUSTOMER": "DREAM LAND DEPARTMENT STORE CENTER LLC", "Customer_code": "SHT/RTL/1102", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "RK BTL FINE TABLE SALT(BLUE) - 12 X 700 GM", "Product_1_profit20-40%": "RK SUGAR - 6 X 2 KG", "Product_2_profit20-40%": "RK BTL FINE TABLE SALT IODIZED(RED) - 12 X 700 GM", "Product_1_profit40-60%": "RK PR CORIANDER POWDER - 48 X 200 GM", "Product_2_profit40-60%": "RK GREEN PEAS - 32 X 500 GM", "Product_1_profit60-80%": "RK PANCH PHORON - 72 X 100 GM", "Product_2_profit60-80%": "RK MUSTARD SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "98", "EMPLOYEE": "ANWAR", "CUSTOMER": "DAR AL AMANAH SUPERMARKET LLC (SANAIYA)", "Customer_code": "SHT/RTL/1103", "Product_1_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PR BASMATI RICE - 3 KG", "Product_1_profit20-40%": "RK BLACK PEPPER WHOLE - 72 X 100 GM", "Product_2_profit20-40%": "RK CARDAMOM - 72 X 50 GM", "Product_1_profit40-60%": "RK RAGI POWDER - 24 X 500 GM", "Product_2_profit40-60%": "RK CLOVES - 72 X 50 GM", "Product_1_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK FLAX SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "100", "EMPLOYEE": "ANWAR", "CUSTOMER": "AL SABAH AL MUSHRIQ SUPERMARKET L.L.C", "Customer_code": "SHT/RTL/1109", "Product_1_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "RK BTL FINE TABLE SALT(BLUE) - 12 X 700 GM", "Product_1_profit20-40%": "RK PR SEMOLINA - 12 X 1 KG", "Product_2_profit20-40%": "RK PR KASURI METHI (COMBO BOX) - 2 X 50 GM", "Product_1_profit40-60%": "RK PAPRIKA POWDER - 72 X 100 GM", "Product_2_profit40-60%": "RK POPCORN - 32 X 500 GM", "Product_1_profit60-80%": "RK GINGER POWDER - 72 X 100 GM", "Product_2_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "102", "EMPLOYEE": "ANWAR", "CUSTOMER": "CITY MARKET", "Customer_code": "SHT/RTL/1123", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK PR ASSAM BLACK TEA - 48 X 200 GM", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PR STEAM PUTTU PODI 10 X 1 KG", "Product_1_profit20-40%": "RK BLACK PEPPER WHOLE - 72 X 100 GM", "Product_2_profit20-40%": "RK PR CHILLY POWDER - 48 X 200 GM", "Product_1_profit40-60%": "RK RAGI POWDER - 24 X 500 GM", "Product_2_profit40-60%": "RK GREEN PEAS - 32 X 500 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "104", "EMPLOYEE": "ANWAR", "CUSTOMER": "DAY TO DAY INTERNATIONAL HYPERMARKET", "Customer_code": "SHT/RTL/1136", "Product_1_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PHOOL MAKHANA - 10 X 100 GM", "Product_1_profit20-40%": "ANJALI GINGELLY OIL - 60 X 200 ML", "Product_2_profit20-40%": "RK BLACK PEPPER WHOLE - 72 X 100 GM", "Product_1_profit40-60%": "RK PAPRIKA POWDER - 72 X 100 GM", "Product_2_profit40-60%": "RK SESAME SEED BLACK - 72 X 100 GM", "Product_1_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK LEMON POWDER - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "105", "EMPLOYEE": "ANWAR", "CUSTOMER": "AL MATJAR AL WATANI GENERAL TRADING (S.P.S-L.L.C)", "Customer_code": "SHT/RTL/1150", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "No Product", "Product_2_profit10-20%": "No Product", "Product_1_profit20-40%": "RK SUGAR - 12 X 1 KG", "Product_2_profit20-40%": "RK KABULI CHICK PEAS - LARGE - 32 X 500 GM", "Product_1_profit40-60%": "RK CHANA DAL - 32 X 500 GM", "Product_2_profit40-60%": "RK MASOOR DAL - 32 X 500 GM", "Product_1_profit60-80%": "RK SOYA WADI - 20 X 200 GM", "Product_2_profit60-80%": "No Product", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "106", "EMPLOYEE": "ANWAR", "CUSTOMER": "AL DOLPHIN AL AZRAQ TRADING CENTER- BRANCH 01", "Customer_code": "SHT/RTL/1154", "Product_1_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_2_profit<10%": "RK PR ASSAM BLACK TEA - 48 X 200 GM", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "RK PR RED KIDNEY BEANS 16 X 1KG", "Product_1_profit20-40%": "RK PR KALA CHANA - 16 X 1 KG", "Product_2_profit20-40%": "RK URAD DAL - 32 X 500 GM", "Product_1_profit40-60%": "RK MASOOR GOTA - 32 X 500 GM", "Product_2_profit40-60%": "RK POPCORN - 32 X 500 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 48 X 200 GM", "Product_2_profit60-80%": "RK CUMIN SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "107", "EMPLOYEE": "ANWAR", "CUSTOMER": "BEST DAY GIFTS L.L.C", "Customer_code": "SHT/RTL/1155", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_1_profit10-20%": "RK PR Basmathi Rice 5kg", "Product_2_profit10-20%": "RK PR LONG GRAIN BIRIYANI RICE - 5 X 5KG", "Product_1_profit20-40%": "RK PR URAD DAL - 16 X 1 KG", "Product_2_profit20-40%": "RK PR MOONG DAL 16 X 1 KG", "Product_1_profit40-60%": "RK PR BOTTLE COMBO (CTC) - 3 X 160 GM", "Product_2_profit40-60%": "RK PR CORIANDER POWDER - 48 X 200 GM", "Product_1_profit60-80%": "RK BTL OREGANO - 24 X 75 GM", "Product_2_profit60-80%": "RK BTL GARAM MASALA POWDER - 24 X 160 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "108", "EMPLOYEE": "ANWAR", "CUSTOMER": "AL MAYAR SUPERMARKET L.L.C - S.P", "Customer_code": "SHT/RTL/1157", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "No Product", "Product_2_profit10-20%": "No Product", "Product_1_profit20-40%": "RK RED KIDNEY BEANS - 32 X 500 GM", "Product_2_profit20-40%": "No Product", "Product_1_profit40-60%": "RK BLACK EYE BEANS - 32 X 500 GM", "Product_2_profit40-60%": "No Product", "Product_1_profit60-80%": "RK DRY LEMON BLACK - 32 X 50 GM", "Product_2_profit60-80%": "No Product", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "110", "EMPLOYEE": "ANWAR", "CUSTOMER": "DREAM LAND DEPARTMENT STORE CENTER L.L.C", "Customer_code": "SHT/RTL/1162", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "No Product", "Product_2_profit10-20%": "No Product", "Product_1_profit20-40%": "RK URAD DAL - 32 X 500 GM", "Product_2_profit20-40%": "RK BLACK PEPPER WHOLE - 72 X 100 GM", "Product_1_profit40-60%": "RK RED CHAWLI -COW BEANS - 32 X 500 GM", "Product_2_profit40-60%": "RK CHANA DAL - 32 X 500 GM", "Product_1_profit60-80%": "RK CASSIA WHOLE - 24 X 100 GM", "Product_2_profit60-80%": "RK DRY LEMON BLACK - 32 X 50 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "111", "EMPLOYEE": "ANWAR", "CUSTOMER": "ASWAQ DOLPHIN - SHJ. BR 1", "Customer_code": "SHT/RTL/1169", "Product_1_profit<10%": "RK PR BOX SAMBAR POWDER - 40 X 160 GM", "Product_2_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_1_profit10-20%": "RK PR Palakkadan Matta Rice 5kg", "Product_2_profit10-20%": "RK PR CHAKKI ATTA -10 KG", "Product_1_profit20-40%": "RK JAGGERY - 20 X 500 GM", "Product_2_profit20-40%": "RK MOONG DAL - 32 X 500 GM", "Product_1_profit40-60%": "RK URAD SPLIT - 32 X 500 GM", "Product_2_profit40-60%": "RK KALA CHANA - 32 X 500 GM", "Product_1_profit60-80%": "RK PANCH PHORON - 72 X 100 GM", "Product_2_profit60-80%": "RK MUSTARD SEED - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "112", "EMPLOYEE": "ANWAR", "CUSTOMER": "UNITED DISCOUNT CENTER LLC", "Customer_code": "SHT/RTL/1174", "Product_1_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "RK PR BASMATHI XXL RICE 8x2 KG", "Product_1_profit20-40%": "RK JAGGERY - 20 X 500 GM", "Product_2_profit20-40%": "RK PR CHAKKI ATTA - 6 X 2 KG", "Product_1_profit40-60%": "RK RAGI POWDER - 24 X 500 GM", "Product_2_profit40-60%": "RK RAISIN - 72 X 100 GM", "Product_1_profit60-80%": "RK YELLOW MUSTARD SEED - 72 X 100 GM", "Product_2_profit60-80%": "RK ROASTED GRAM SPLIT - 72 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "113", "EMPLOYEE": "ANWAR", "CUSTOMER": "DREAM NIGHT DEPARTMENT STORE L.L.C", "Customer_code": "SHT/RTL/1175", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK PR ASSAM BLACK TEA - 48 X 200 GM", "Product_1_profit10-20%": "RK PR WHEAT PUTTU PODI 10 X 1 KG", "Product_2_profit10-20%": "RK PR STEAM PUTTU PODI 10 X 1 KG", "Product_1_profit20-40%": "RK ARABIC MASALA - 72 X 100 GM", "Product_2_profit20-40%": "RK CARDAMOM - 72 X 100 GM", "Product_1_profit40-60%": "RK CLOVES - 72 X 100 GM", "Product_2_profit40-60%": "RK BESAN - CHANA DAL - 24 X 400 GM", "Product_1_profit60-80%": "RK ANARDANA - 72 X 100 GM", "Product_2_profit60-80%": "RK DRY LEMON BLACK - 32 X 50 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "115", "EMPLOYEE": "ANWAR", "CUSTOMER": "FURQAN AL MADINA SUPERMARKET L.L.C", "Customer_code": "SHT/RTL/1178", "Product_1_profit<10%": "MOONG DAL - 777 - 15 KG", "Product_2_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_1_profit10-20%": "RK PR LONG GRAIN BIRIYANI RICE - 5 X 5KG", "Product_2_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_1_profit20-40%": "RK PR CHANA DAL - 16 X 1 KG", "Product_2_profit20-40%": "RK BOX CURRY POWDER - 40 X 160 GM", "Product_1_profit40-60%": "RK BLACK PEPPER POWDER 48 X 200 GM", "Product_2_profit40-60%": "RK GARAM MASALA POWDER - 48 X 200 GM", "Product_1_profit60-80%": "RK BTL CUMIN SEED - 24 X 100 GM", "Product_2_profit60-80%": "RK BTL CUMIN POWDER - 24 X 160 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "116", "EMPLOYEE": "ANWAR", "CUSTOMER": "TWENTY GIFTS CENTER", "Customer_code": "SHT/RTL/1180", "Product_1_profit<10%": "777 CHAKKI FRESH ATTA - 50 KG", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR FINE TABLE SALT (COMBO BOTTLE) - 3 X 700 GM", "Product_2_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_1_profit20-40%": "RK PR MOONG DAL 16 X 1 KG", "Product_2_profit20-40%": "RK PR TOOR DAL - 16 X 1 KG", "Product_1_profit40-60%": "RK MASOOR DAL - 32 X 500 GM", "Product_2_profit40-60%": "RK KALA CHANA - 32 X 500 GM", "Product_1_profit60-80%": "RK LEMON SALT - 72 X100 GM", "Product_2_profit60-80%": "RK CORIANDER POWDER - 48 X 200 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "117", "EMPLOYEE": "ANWAR", "CUSTOMER": "BEST GIFTS CENTER - SAJJA", "Customer_code": "SHT/RTL/1181", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR CHAKKI ATTA -10 KG", "Product_2_profit10-20%": "No Product", "Product_1_profit20-40%": "RK BTL BIRIYANI MASALA - 24 X 160 GM", "Product_2_profit20-40%": "RK BTL ARABIC MASALA - 24 X 160 GM", "Product_1_profit40-60%": "RK BTL PAPRIKA POWDER - 24 X 160 GM", "Product_2_profit40-60%": "RK BTL BLACK PEPPER WHOLE - 24 X 150 GM", "Product_1_profit60-80%": "RK BTL TURMERIC POWDER - 24 X 160 GM", "Product_2_profit60-80%": "RK BTL OREGANO - 24 X 75 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "118", "EMPLOYEE": "ANWAR", "CUSTOMER": "PLUS GIFT ROYAL TRADING L.L.C", "Customer_code": "SHT/RTL/1194", "Product_1_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "RK PR BASMATHI XXL RICE 8x2 KG", "Product_1_profit20-40%": "RK PR MOONG DAL 16 X 1 KG", "Product_2_profit20-40%": "RK PR KALA CHANA - 16 X 1 KG", "Product_1_profit40-60%": "RK SESAME SEED BLACK - 72 X 100 GM", "Product_2_profit40-60%": "RK PR CORIANDER POWDER - 48 X 200 GM", "Product_1_profit60-80%": "RK DRY LEMON BLACK - 32 X 50 GM", "Product_2_profit60-80%": "RK POHA WHITE - 32 X 200 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "119", "EMPLOYEE": "ANWAR", "CUSTOMER": "CHAI PYALA CAFETERIA L.L.C", "Customer_code": "SHT/RTL/1195", "Product_1_profit<10%": "RK PR COCONUT OIL - 12 X 1 LTR", "Product_2_profit<10%": "RK TAMARIND - 40 X 500 GM", "Product_1_profit10-20%": "RK PR LONG GRAIN BIRIYANI RICE - 5 X 5KG", "Product_2_profit10-20%": "RK BTL FINE TABLE SALT(BLUE) - 12 X 700 GM", "Product_1_profit20-40%": "RK PR MOONG DAL 16 X 1 KG", "Product_2_profit20-40%": "RK PR CHANA DAL - 16 X 1 KG", "Product_1_profit40-60%": "RK BTL BLACK PEPPER POWDER - 24 X 160 GM", "Product_2_profit40-60%": "RK PR CORIANDER POWDER - 48 X 200 GM", "Product_1_profit60-80%": "RK BTL CUMIN SEED - 24 X 100 GM", "Product_2_profit60-80%": "RK BTL MUSTARD SEED - 24 X 200 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "122", "EMPLOYEE": "ANWAR", "CUSTOMER": "MCK SUPERMARKET FZCO", "Customer_code": "SHT/RTL/1213", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK SUNFLOWER OIL - 6 X 1.5 LTR", "Product_2_profit10-20%": "RK PR JEERAKASHALA (GHEE RICE ) - 9X 2 KG", "Product_1_profit20-40%": "RK SUGAR - 12 X 1 KG", "Product_2_profit20-40%": "RK PR MOONG DAL 16 X 1 KG", "Product_1_profit40-60%": "RK RAGI POWDER - 24 X 500 GM", "Product_2_profit40-60%": "RK RAGI SEED - 32 X 500 GM", "Product_1_profit60-80%": "RK LEMON SALT - 72 X100 GM", "Product_2_profit60-80%": "No Product", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "123", "EMPLOYEE": "ANWAR", "CUSTOMER": "CENTRO ZOOM GENERAL TRADING L.L.C", "Customer_code": "SHT/RTL/1214", "Product_1_profit<10%": "RK PR ASSAM BLACK TEA - 48 X 200 GM", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR Palakkadan Matta Rice 5kg", "Product_2_profit10-20%": "RK BOX CORN FLOUR - 12 X 400 GM", "Product_1_profit20-40%": "RK BOX MUTTON MASALA - 40 X 160 GM", "Product_2_profit20-40%": "RK BTL FINE TABLE SALT IODIZED(RED) - 12 X 700 GM", "Product_1_profit40-60%": "RK QUINOA WHITE - 32 X 350 GM", "Product_2_profit40-60%": "RK MASOOR WHOLE - 32 X 500 GM", "Product_1_profit60-80%": "RK MUSTARD SEED - 48 X 200 GM", "Product_2_profit60-80%": "RK KASHMIRI CHILLY WHOLE - 24 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "124", "EMPLOYEE": "ANWAR", "CUSTOMER": "DAY TO DAY INTERNATIONAL HYPERMARKET - SHJ. BR - BRANCH 3", "Customer_code": "SHT/RTL/1215", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR BESAN POWDER- 10 X 1 KG", "Product_2_profit10-20%": "RK PR Palakkadan Matta Rice 5kg", "Product_1_profit20-40%": "RK BLACK PEPPER WHOLE - 72 X 100 GM", "Product_2_profit20-40%": "RK TOOR DAL - 16 X 1 KG", "Product_1_profit40-60%": "RK POHA RED - 12 X 400 GM", "Product_2_profit40-60%": "RK CLOVES - 72 X 50 GM", "Product_1_profit60-80%": "RK ROASTED GRAM SPLIT - 48 X 200 GM", "Product_2_profit60-80%": "RK KASHMIRI CHILLY WHOLE - 24 X 100 GM", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}, {"Unnamed: 0": "132", "EMPLOYEE": "ANWAR", "CUSTOMER": "AL KHATAR SUPERMARKET", "Customer_code": "VS/SM/SHJ/0026", "Product_1_profit<10%": "No Product", "Product_2_profit<10%": "No Product", "Product_1_profit10-20%": "RK PR JEERAKASHALA (GHEE RICE ) - 9X 2 KG", "Product_2_profit10-20%": "No Product", "Product_1_profit20-40%": "RK PR BOTTLE COMBO ( SAMBAR,CURRY,CORRI ) 3 X 160 GM", "Product_2_profit20-40%": "RK FINE TABLE SALT - 12 X 1 KG", "Product_1_profit40-60%": "No Product", "Product_2_profit40-60%": "No Product", "Product_1_profit60-80%": "No Product", "Product_2_profit60-80%": "No Product", "Product_1_profit80+%": "No Product", "Product_2_profit80+%": "No Product"}];
+    const SAVE_ENDPOINT = "https://script.google.com/macros/s/AKfycbz10HGLuKzYtXNVMgavfEZIQfHBalXOVQ-HhEPoHjIzXKydfjiHHU7uithvSl5YBNwRRg/exec"; // e.g. "https://script.google.com/macros/s/…/exec"
+
+    /* ===== Elements ===== */
+    const listView = document.getElementById('list-view');
+    const detailView = document.getElementById('detail-view');
+    const cards = document.getElementById('cards');
+    const searchBox = document.getElementById('searchBox');
+    const customerSelect = document.getElementById('customerSelect');
+    const title = document.getElementById('title');
+    const visitedEl = document.getElementById('visited');
+    const visitedStatus = document.getElementById('visitedStatus');
+    const profitBody = document.getElementById('profitBody');
+    const toast = document.getElementById('toast');
+    const feedbackEl = document.getElementById('feedback');
+
+    title.textContent = `AI Recommendations — ${EMPLOYEE_NAME}`;
+
+    /* ===== Profit bands + exact CSV keys ===== */
+    const BANDS = [
+      { label: "<10%",   k1: "Product_1_profit<10%",   k2: "Product_2_profit<10%" },
+      { label: "10-20%", k1: "Product_1_profit10-20%", k2: "Product_2_profit10-20%" },
+      { label: "20-40%", k1: "Product_1_profit20-40%", k2: "Product_2_profit20-40%" },
+      { label: "40-60%", k1: "Product_1_profit40-60%", k2: "Product_2_profit40-60%" },
+      { label: "60-80%", k1: "Product_1_profit60-80%", k2: "Product_2_profit60-80%" },
+    ];
+
+    /* ===== Helpers ===== */
+    const STORAGE_KEY = `ai-reco-updates::${EMPLOYEE_NAME}`;
+    function loadLocalUpdates(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}"); }catch{return {}} }
+    function saveLocalUpdates(map){ localStorage.setItem(STORAGE_KEY, JSON.stringify(map)); }
+    function showToast(msg='Saved'){ toast.textContent=msg; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'), 1400); }
+    const trim = v => (v ?? "").toString().trim();
+
+    // Build list view
+    const uniqueCustomers = [...new Map(
+      ROWS.map(r => [r.CUSTOMER + '|' + r.Customer_code, {CUSTOMER:r.CUSTOMER, Customer_code:r.Customer_code}])
+    ).values()];
+    function populateSelect() {
+      customerSelect.innerHTML = '<option value="">All Customers</option>';
+      uniqueCustomers.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u.CUSTOMER + '|' + u.Customer_code;
+        opt.textContent = `${u.CUSTOMER} (${u.Customer_code})`;
+        customerSelect.appendChild(opt);
+      });
+    }
+    populateSelect();
+
+    function renderCards() {
+      const q = (searchBox.value || '').toLowerCase();
+      const sel = customerSelect.value;
+      const groups = {};
+      for (const r of ROWS) {
+        const key = r.CUSTOMER + '|' + r.Customer_code;
+        if (sel && key !== sel) continue;
+        if (q && !(r.CUSTOMER.toLowerCase().includes(q) || String(r.Customer_code).toLowerCase().includes(q))) continue;
+        if (!groups[key]) groups[key] = r;
+      }
+      cards.innerHTML = '';
+      Object.values(groups).forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="row"><b>Customer:</b> ${r.CUSTOMER}</div>
+          <div class="row"><b>Customer Code:</b> ${r.Customer_code}</div>
+          <button class="btn">View Products</button>
+        `;
+        card.querySelector('button').addEventListener('click', () => openDetail(r));
+        cards.appendChild(card);
+      });
+    }
+    searchBox.addEventListener('input', renderCards);
+    customerSelect.addEventListener('change', renderCards);
+
+    let currentRow = null;
+    const ref = { p1: [], p2: [], p1Names: [], p2Names: [] }; // checkbox refs + names per band
+
+    function renderProfitTable(row){
+      profitBody.innerHTML = '';
+      ref.p1 = []; ref.p2 = []; ref.p1Names = []; ref.p2Names = [];
+
+      BANDS.forEach((b, idx) => {
+        const tr = document.createElement('tr');
+
+        const td0 = document.createElement('td');
+        td0.textContent = b.label;
+        td0.style.textAlign = 'left';
+        td0.className = 'profit-col';
+
+        const td1 = document.createElement('td'); td1.className = 'prod';
+        const td2 = document.createElement('td'); td2.className = 'prod';
+
+        const v1 = trim(row[b.k1]);   // product name (or empty) for Product 1 in this band
+        const v2 = trim(row[b.k2]);   // product name (or empty) for Product 2 in this band
+
+        const c1 = document.createElement('input'); c1.type='checkbox'; c1.id=`p1_${idx}`;
+        const c2 = document.createElement('input'); c2.type='checkbox'; c2.id=`p2_${idx}`;
+
+        // no pre-check — EMPLOYEE decides
+        c1.checked = false;
+        c2.checked = false;
+
+        // label with single-line name + ellipsis if long
+        const l1 = document.createElement('label'); l1.className = 'cell';
+        l1.appendChild(c1);
+        const s1 = document.createElement('span'); s1.className='name'; s1.textContent = v1;
+        l1.appendChild(s1);
+
+        const l2 = document.createElement('label'); l2.className = 'cell';
+        l2.appendChild(c2);
+        const s2 = document.createElement('span'); s2.className='name'; s2.textContent = v2;
+        l2.appendChild(s2);
+
+        td1.appendChild(l1);
+        td2.appendChild(l2);
+
+        tr.appendChild(td0); tr.appendChild(td1); tr.appendChild(td2);
+        profitBody.appendChild(tr);
+
+        ref.p1.push(c1); ref.p2.push(c2);
+        ref.p1Names.push(v1); ref.p2Names.push(v2);
+      });
+    }
+
+    function openDetail(row){
+      listView.classList.add('hidden');
+      detailView.classList.remove('hidden');
+
+      currentRow = row;
+      document.getElementById('dCustomer').textContent = row.CUSTOMER || '-';
+      document.getElementById('dCode').textContent = row.Customer_code || '-';
+
+      // Local restore (optional fallback only)
+      const map = loadLocalUpdates();
+      const rec = map[row.Customer_code];
+      const visited = rec ? (rec.Visited === 'Yes') : false;
+      visitedEl.checked = visited;
+      visitedStatus.textContent = visited ? 'Yes' : 'No';
+      feedbackEl.value = rec ? (rec.Feedback || '') : '';
+
+      renderProfitTable(row);
+    }
+
+    visitedEl.addEventListener('change', ()=> {
+      visitedStatus.textContent = visitedEl.checked ? 'Yes' : 'No';
+    });
+
+    // Recommended Products = names for checked boxes (unique, comma-separated)
+    function computeRecommendedList(){
+      const set = new Set();
+      ref.p1.forEach((cb, i) => { if (cb.checked && ref.p1Names[i]) set.add(ref.p1Names[i]); });
+      ref.p2.forEach((cb, i) => { if (cb.checked && ref.p2Names[i]) set.add(ref.p2Names[i]); });
+      return Array.from(set).join(', ');
+    }
+
+    async function persist(update) {
+      try {
+        const res = await fetch(SAVE_ENDPOINT, {
+          method: 'POST',
+          headers: {'Content-Type':'text/plain;charset=UTF-8'}, // simple request for Apps Script
+          body: JSON.stringify(update)
+        });
+        const text = await res.text();
+        let data = {}; try { data = JSON.parse(text); } catch {}
+        if (!res.ok || data.ok === false) throw new Error(data.error || `HTTP ${res.status}: ${text}`);
+        showToast('Saved');
+        return true;
+      } catch (e) {
+        const map = loadLocalUpdates();
+        map[update.Customer_code] = update;
+        saveLocalUpdates(map);
+        showToast('Saved locally');
+        return false;
+      }
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      if (!currentRow) return;
+      const payload = {
+        EMPLOYEE: EMPLOYEE_NAME,
+        CUSTOMER: currentRow.CUSTOMER,
+        Customer_code: currentRow.Customer_code,
+        Visited: visitedEl.checked ? 'Yes' : 'No',
+        "Recommended Products": computeRecommendedList(),
+        Feedback: feedbackEl.value || ''
+      };
+      persist(payload);
+    });
+
+    document.getElementById('backBtn').addEventListener('click', () => {
+      detailView.classList.add('hidden');
+      listView.classList.remove('hidden');
+      window.scrollTo({top:0, behavior:'instant'});
+    });
+
+    // First paint
+    renderCards();
+  </script>
+</body>
+</html>
